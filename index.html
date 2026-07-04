@@ -54,11 +54,20 @@ document.body.appendChild(renderer.domElement);
 // アナグリフ（視差を強めて立体感アップ）
 // ======================
 const effect = new AnaglyphEffect(renderer);
-// デフォルトより視差を強くして「飛び出し感」を強調
-// (値が大きいほど左右のズレが大きくなり、より立体的に見える)
-if (typeof effect.setEyeSeparation === "function") {
-  effect.setEyeSeparation(0.15);
-}
+
+// ---- ここが重要 ----
+// eyeSep: 目の間隔（大きいほど立体感=視差が強くなる。人間は約0.064）
+// planeDistance: ゼロ視差面（＝スクリーン面）までの距離。
+//   これより近いオブジェクトは「手前に飛び出て」見え(negative parallax)、
+//   これより遠いオブジェクトは「奥に沈んで」見える(positive parallax)。
+//   デフォルトは0.5と非常に小さく、宝石が飛んでくる距離(3〜44)よりずっと手前にあるため
+//   従来は常に「奥に沈む」判定になり、一度も本当の飛び出し視差が起きていなかった。
+effect.eyeSep = 0.11;
+// カメラは(0,1,14)にいて奥(-z方向)を見ているので、
+// planeDistance = camera.position.z にすると、
+// ちょうど「ワールド座標のz=0」がスクリーン面（ゼロ視差面）になる。
+// つまりジェムがz=0を通過した瞬間から「画面の手前に飛び出す」判定に切り替わる。
+effect.planeDistance = camera.position.z;
 
 // ======================
 // light（宝石見えるように）
@@ -82,11 +91,11 @@ let gem;
 // END_Z  : カメラのすぐ手前まで迫る地点（ここまで来て初めてリセット）
 // CAMERA_Z: カメラのz座標（近づき具合の計算に使用）
 const START_Z = -30;
-const END_Z = 11;          // カメラ(14)のすぐ手前。以前は-3で止まっていたのをここまで伸ばす
+const END_Z = 12.5;         // カメラ(14)のさらに手前まで。distance=1.5まで許容
 const CAMERA_Z = camera.position.z;
 const BASE_SCALE = 3.5;
 const MIN_SCALE_FACTOR = 0.7;
-const MAX_SCALE_FACTOR = 3.2; // 手前に来た時、以前よりずっと大きく見せる
+const MAX_SCALE_FACTOR = 4.5; // 手前に来た時、画面を突き破るくらい大きく見せる
 
 loader.load("./models/diamond.glb", (gltf) => {
   gem = gltf.scene;
