@@ -62,12 +62,16 @@ const effect = new AnaglyphEffect(renderer);
 //   これより遠いオブジェクトは「奥に沈んで」見える(positive parallax)。
 //   デフォルトは0.5と非常に小さく、宝石が飛んでくる距離(3〜44)よりずっと手前にあるため
 //   従来は常に「奥に沈む」判定になり、一度も本当の飛び出し視差が起きていなかった。
-effect.eyeSep = 0.11;
-// カメラは(0,1,14)にいて奥(-z方向)を見ているので、
-// planeDistance = camera.position.z にすると、
-// ちょうど「ワールド座標のz=0」がスクリーン面（ゼロ視差面）になる。
-// つまりジェムがz=0を通過した瞬間から「画面の手前に飛び出す」判定に切り替わる。
-effect.planeDistance = camera.position.z;
+// eyeSep: 人間の実際のIPD(0.064)の2倍以上。ここまで上げると立体感はかなり強いが、
+// 上げすぎると脳が左右の映像を融合できず「単に二重にブレて見える」だけになるので注意。
+// 0.16〜0.18あたりが「かなり飛び出るが破綻はしない」上限の目安。
+effect.eyeSep = 0.16;
+
+// planeDistanceを大きくする＝スクリーン面（ゼロ視差面）が画面のずっと奥に下がる
+// → 軌道のほとんどの区間が「スクリーン面より手前」＝飛び出し判定になる。
+// 20にすると、world z = 14 - 20 = -6 がスクリーン面になる。
+// つまりジェムがz=-6を超えた時点(かなり早い段階)からずっと「手前に飛び出て」見え続ける。
+effect.planeDistance = 20;
 
 // ======================
 // light（宝石見えるように）
@@ -90,12 +94,12 @@ let gem;
 // START_Z: スタート地点（奥）
 // END_Z  : カメラのすぐ手前まで迫る地点（ここまで来て初めてリセット）
 // CAMERA_Z: カメラのz座標（近づき具合の計算に使用）
-const START_Z = -30;
+const START_Z = -18;        // 軌道を短くして、飛び出す頻度・体感速度を上げる
 const END_Z = 12.5;         // カメラ(14)のさらに手前まで。distance=1.5まで許容
 const CAMERA_Z = camera.position.z;
 const BASE_SCALE = 3.5;
 const MIN_SCALE_FACTOR = 0.7;
-const MAX_SCALE_FACTOR = 4.5; // 手前に来た時、画面を突き破るくらい大きく見せる
+const MAX_SCALE_FACTOR = 6.0; // 手前に来た時、画面を突き破るくらい大きく見せる
 
 loader.load("./models/diamond.glb", (gltf) => {
   gem = gltf.scene;
@@ -170,8 +174,8 @@ function animate() {
       0,
       1
     );
-    // 2乗イージングで、手前に来たときの「グワッ」とした加速感を出す
-    const eased = progress * progress;
+    // 3乗イージングで、手前に来た瞬間の「グワッ」とした加速感をさらに強調
+    const eased = progress * progress * progress;
     const d = THREE.MathUtils.lerp(MIN_SCALE_FACTOR, MAX_SCALE_FACTOR, eased);
 
     gem.scale.set(BASE_SCALE * d, BASE_SCALE * d, BASE_SCALE * d);
