@@ -62,16 +62,11 @@ const effect = new AnaglyphEffect(renderer);
 //   これより遠いオブジェクトは「奥に沈んで」見える(positive parallax)。
 //   デフォルトは0.5と非常に小さく、宝石が飛んでくる距離(3〜44)よりずっと手前にあるため
 //   従来は常に「奥に沈む」判定になり、一度も本当の飛び出し視差が起きていなかった。
-// eyeSep: 人間の実際のIPD(0.064)の2倍以上。ここまで上げると立体感はかなり強いが、
-// 上げすぎると脳が左右の映像を融合できず「単に二重にブレて見える」だけになるので注意。
-// 0.16〜0.18あたりが「かなり飛び出るが破綻はしない」上限の目安。
-effect.eyeSep = 0.16;
+// eyeSep: 強すぎると色の融合が壊れて白っぽく飛ぶので、少し戻して安全マージンを取る
+effect.eyeSep = 0.12;
 
-// planeDistanceを大きくする＝スクリーン面（ゼロ視差面）が画面のずっと奥に下がる
-// → 軌道のほとんどの区間が「スクリーン面より手前」＝飛び出し判定になる。
-// 20にすると、world z = 14 - 20 = -6 がスクリーン面になる。
-// つまりジェムがz=-6を超えた時点(かなり早い段階)からずっと「手前に飛び出て」見え続ける。
-effect.planeDistance = 20;
+// planeDistanceも少し戻す
+effect.planeDistance = 16;
 
 // ======================
 // light（宝石見えるように）
@@ -89,17 +84,30 @@ scene.add(light2);
 // ======================
 const loader = new GLTFLoader();
 let gem;
+// フェードイン・フェードアウトのために、生成したマテリアルへの参照を保持しておく
+const gemMaterials = [];
+const wireMaterials = [];
 
 // ---- 飛び出しの距離設定 ----
 // START_Z: スタート地点（奥）
 // END_Z  : カメラのすぐ手前まで迫る地点（ここまで来て初めてリセット）
 // CAMERA_Z: カメラのz座標（近づき具合の計算に使用）
 const START_Z = -18;        // 軌道を短くして、飛び出す頻度・体感速度を上げる
-const END_Z = 12.5;         // カメラ(14)のさらに手前まで。distance=1.5まで許容
+// END_Z: カメラ(14)から最低でも4ユニットは距離を残す。
+// カメラに近づきすぎると視差が発散して色の融合が壊れ、白飛びして
+// 「線だけ残る」現象が起きるため、ここで安全マージンを確保する。
+const END_Z = 10;
 const CAMERA_Z = camera.position.z;
 const BASE_SCALE = 3.5;
 const MIN_SCALE_FACTOR = 0.7;
-const MAX_SCALE_FACTOR = 6.0; // 手前に来た時、画面を突き破るくらい大きく見せる
+// 最接近距離に余裕を持たせた分、視覚的な迫力はスケールでより強く出す
+const MAX_SCALE_FACTOR = 8.0;
+
+// ---- フェードイン/フェードアウト設定 ----
+// 進行度(progress)の最初と最後、それぞれこの割合の区間で不透明度を0まで下げる
+const FADE_RANGE = 0.12;
+const BASE_GEM_OPACITY = 0.85;
+const BASE_WIRE_OPACITY = 0.25;
 
 loader.load("./models/diamond.glb", (gltf) => {
   gem = gltf.scene;
@@ -124,6 +132,7 @@ loader.load("./models/diamond.glb", (gltf) => {
         emissive: new THREE.Color(0x0a1a3a),
         emissiveIntensity: 0.6
       });
+      gemMaterials.push(child.material);
       // ======================
       // カット線（ワイヤー）
       // ======================
@@ -135,6 +144,7 @@ loader.load("./models/diamond.glb", (gltf) => {
           opacity: 0.25
         })
       );
+      wireMaterials.push(wire.material);
       child.add(wire);
     }
   });
@@ -179,6 +189,19 @@ function animate() {
     const d = THREE.MathUtils.lerp(MIN_SCALE_FACTOR, MAX_SCALE_FACTOR, eased);
 
     gem.scale.set(BASE_SCALE * d, BASE_SCALE * d, BASE_SCALE * d);
+
+    // ---- フェード計算 ----
+    // 序盤(progress: 0→FADE_RANGE)だけフワッと現れる。
+    // 終盤はフェードアウトさせず、最後まで色をフルで残したまま
+    // （奥に戻る瞬間だけ一瞬で切り替わる）。
+    const fade = THREE.MathUtils.clamp(progress / FADE_RANGE, 0, 1);
+
+    for (const mat of gemMaterials) {
+      mat.opacity = BASE_GEM_OPACITY * fade;
+    }
+    for (const mat of wireMaterials) {
+      mat.opacity = BASE_WIRE_OPACITY * fade;
+    }
   }
 
   effect.render(scene, camera);
