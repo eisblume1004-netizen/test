@@ -153,13 +153,13 @@ function animate() {
     gem.rotation.z += 0.006;
 
     // 手前に来すぎる前に戻す
-    if (gem.position.z > -0.8) {
+    if (gem.position.z > -3) {
       gem.position.z = -30;
     }
 
     // 徐々に大きくする
-    const d = THREE.MathUtils.clamp((gem.position.z + 30) / 30, 0.7, 1.6);
-    gem.scale.set(3.5 * d, 3.5 * d, 3.5 * d);
+    const d = THREE.MathUtils.clamp((gem.position.z + 30) / 30, 0.8, 1.2);
+    gem.scale.set(3.0 * d, 3.0 * d, 3.0 * d);
   }
 
   effect.render(scene, camera);
