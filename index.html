@@ -141,31 +141,31 @@ function animate() {
     const t = Date.now() * 0.001;
 
     // 奥→手前
-    gem.position.z += 0.22;
+    gem.position.z += 0.16;
 
-    // 揺れ
-    gem.position.x = Math.sin(t * 0.9) * 1.8;
-    gem.position.y = Math.sin(t * 1.3) * 0.6;
+    // 左右・上下にふわっと揺れる
+    gem.position.x = Math.sin(t * 0.9) * 1.4;
+    gem.position.y = Math.sin(t * 1.3) * 0.5;
 
     // 回転
     gem.rotation.y += 0.02;
-    gem.rotation.x = Math.sin(t * 0.6) * 0.4;
+    gem.rotation.x = Math.sin(t * 0.6) * 0.3;
+    gem.rotation.z += 0.006;
 
-    // 手前でリセット
-    if (gem.position.z > 18) {
+    // 手前に来すぎる前に戻す
+    if (gem.position.z > -0.8) {
       gem.position.z = -30;
     }
 
-    // 近づくと少し大きくなる
-    const d = THREE.MathUtils.clamp((gem.position.z + 30) / 30, 0.6, 2);
-    gem.scale.set(2.8 * d, 2.8 * d, 2.8 * d);
+    // 徐々に大きくする
+    const d = THREE.MathUtils.clamp((gem.position.z + 30) / 30, 0.7, 1.6);
+    gem.scale.set(3.5 * d, 3.5 * d, 3.5 * d);
   }
 
   effect.render(scene, camera);
 }
 
 animate();
-
 // ======================
 // resize
 // ======================
