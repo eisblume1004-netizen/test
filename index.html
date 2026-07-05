@@ -23,7 +23,6 @@ body {
 <script type="module">
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import { AnaglyphEffect } from "three/addons/effects/AnaglyphEffect.js";
 
 // ======================
 // scene
@@ -51,22 +50,62 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 // ======================
-// アナグリフ（視差を強めて立体感アップ）
+// 赤緑アナグリフ（自作の設定に合わせて自前実装）
 // ======================
-const effect = new AnaglyphEffect(renderer);
+// three.jsのAnaglyphEffectは「赤・シアン(青緑)」の組み合わせ用に
+// 色変換が最適化されているため、赤緑フィルムだとそのままでは使えない。
+// なので、左目用・右目用の映像をそれぞれ描画してから、
+// 赤チャンネル・緑チャンネルに直接割り当てる方式にする。
 
-// ---- ここが重要 ----
-// eyeSep: 目の間隔（大きいほど立体感=視差が強くなる。人間は約0.064）
-// planeDistance: ゼロ視差面（＝スクリーン面）までの距離。
-//   これより近いオブジェクトは「手前に飛び出て」見え(negative parallax)、
-//   これより遠いオブジェクトは「奥に沈んで」見える(positive parallax)。
-//   デフォルトは0.5と非常に小さく、宝石が飛んでくる距離(3〜44)よりずっと手前にあるため
-//   従来は常に「奥に沈む」判定になり、一度も本当の飛び出し視差が起きていなかった。
-// eyeSep: 強すぎると色の融合が壊れて白っぽく飛ぶので、少し戻して安全マージンを取る
-effect.eyeSep = 0.12;
+// ---- 重要：どちらの目に赤フィルムを貼ったか ----
+// "left"  = 左目が赤、右目が緑 ←テスト画像で確認した結果、こちらが正解
+// "right" = 右目が赤、左目が緑
+// もし飛び出るはずが逆に引っ込んで見える・違和感がある場合は、
+// 左右を間違えている可能性が高いので、ここを反対の値に変えてみてください。
+const RED_EYE = "left";
 
-// planeDistanceも少し戻す
-effect.planeDistance = 16;
+const stereo = new THREE.StereoCamera();
+stereo.aspect = camera.aspect;
+stereo.eyeSep = 0.12; // 視差の強さ（強すぎると色が融合しづらくなるので注意）
+camera.focus = 16;    // ゼロ視差面（スクリーン面）までの距離。以前のplaneDistanceに相当
+
+// 左目・右目の映像を一旦描き込むためのレンダーターゲット
+const rtLeft = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+const rtRight = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
+
+// 赤緑合成用のフルスクリーンシェーダー
+const composeScene = new THREE.Scene();
+const composeCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+const composeMaterial = new THREE.ShaderMaterial({
+  uniforms: {
+    tRedEye: { value: null },   // 赤フィルム側の目に見せる映像
+    tGreenEye: { value: null }, // 緑フィルム側の目に見せる映像
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = vec4(position.xy, 0.0, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec2 vUv;
+    uniform sampler2D tRedEye;
+    uniform sampler2D tGreenEye;
+    void main() {
+      vec3 redEyeColor = texture2D(tRedEye, vUv).rgb;
+      vec3 greenEyeColor = texture2D(tGreenEye, vUv).rgb;
+      // 色そのものではなく明るさ(輝度)に変換してから
+      // 赤チャンネル・緑チャンネルに割り当てる。
+      // （青系オブジェクトはR,Gの生の値が低く暗くなりがちなので、
+      //   輝度ベースにすることで見えやすくする）
+      float redLum = dot(redEyeColor, vec3(0.299, 0.587, 0.114));
+      float greenLum = dot(greenEyeColor, vec3(0.299, 0.587, 0.114));
+      gl_FragColor = vec4(redLum, greenLum, 0.0, 1.0);
+    }
+  `
+});
+composeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), composeMaterial));
 
 // ======================
 // light（宝石見えるように）
@@ -204,7 +243,27 @@ function animate() {
     }
   }
 
-  effect.render(scene, camera);
+  // ---- 左目・右目それぞれの映像を描画 ----
+  stereo.update(camera);
+
+  renderer.setRenderTarget(rtLeft);
+  renderer.render(scene, stereo.cameraL);
+
+  renderer.setRenderTarget(rtRight);
+  renderer.render(scene, stereo.cameraR);
+
+  // どちらの目の映像を赤チャンネル/緑チャンネルに使うかをRED_EYEに応じて割り当てる
+  if (RED_EYE === "left") {
+    composeMaterial.uniforms.tRedEye.value = rtLeft.texture;
+    composeMaterial.uniforms.tGreenEye.value = rtRight.texture;
+  } else {
+    composeMaterial.uniforms.tRedEye.value = rtRight.texture;
+    composeMaterial.uniforms.tGreenEye.value = rtLeft.texture;
+  }
+
+  // 画面に合成結果を描画
+  renderer.setRenderTarget(null);
+  renderer.render(composeScene, composeCamera);
 }
 animate();
 
@@ -215,6 +274,9 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  rtLeft.setSize(window.innerWidth, window.innerHeight);
+  rtRight.setSize(window.innerWidth, window.innerHeight);
+  stereo.aspect = camera.aspect;
 });
 </script>
 </body>
