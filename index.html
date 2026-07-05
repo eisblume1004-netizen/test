@@ -244,6 +244,10 @@ function animate() {
   }
 
   // ---- 左目・右目それぞれの映像を描画 ----
+  // cameraは直接render()に渡していないため、matrixWorldが自動更新されない。
+  // stereo.update()はこのmatrixWorldを元に左右のカメラ位置を計算するので、
+  // ここで明示的に更新しておく（これを忘れると視差が正しく計算されない）。
+  camera.updateMatrixWorld();
   stereo.update(camera);
 
   renderer.setRenderTarget(rtLeft);
