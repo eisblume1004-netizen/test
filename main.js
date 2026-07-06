@@ -131,7 +131,6 @@ function worldToScreen(vector3, cam) {
 
 // クリックした瞬間、スコープ(=クリック位置)と宝石が画面上で重なっているか判定
 renderer.domElement.addEventListener("click", () => {
-  if (gameState !== "playing") return; // タイトル画面/結果画面中は判定しない
   if (!gem) return;
 
   const gemScreen = worldToScreen(gem.position, camera);
@@ -146,88 +145,16 @@ renderer.domElement.addEventListener("click", () => {
   const distPx = Math.hypot(dx, dy);
 
   if (distPx <= hitRadiusPx) {
-    registerHit(mouseX, mouseY);
+    console.log("HIT!", { distPx, hitRadiusPx });
+    // ---- 命中時の演出（スコープが赤く光る） ----
+    scopeEl.style.filter = "drop-shadow(0 0 12px red) brightness(1.5)";
+    setTimeout(() => { scopeEl.style.filter = ""; }, 150);
+    // 命中した宝石は奥へ戻す（撃ち落とした扱い）
+    gem.position.z = START_Z;
   } else {
-    registerMiss(mouseX, mouseY);
+    console.log("MISS", { distPx, hitRadiusPx });
   }
 });
-
-// ======================
-// ゲーム進行管理（タイトル → プレイ中 → 結果）
-// ======================
-const GAME_DURATION = 60; // 秒
-let gameState = "title"; // "title" | "playing" | "result"
-let score = 0;
-let timeLeft = GAME_DURATION;
-let timerIntervalId = null;
-
-const titleScreenEl = document.getElementById("title-screen");
-const resultScreenEl = document.getElementById("result-screen");
-const startButtonEl = document.getElementById("start-button");
-const retryButtonEl = document.getElementById("retry-button");
-const hudScoreEl = document.getElementById("hud-score");
-const hudTimeEl = document.getElementById("hud-time");
-const resultScoreEl = document.getElementById("result-score");
-
-function updateHud() {
-  hudScoreEl.textContent = `SCORE: ${score}`;
-  hudTimeEl.textContent = `TIME: ${timeLeft}`;
-}
-
-function startGame() {
-  score = 0;
-  timeLeft = GAME_DURATION;
-  updateHud();
-  gameState = "playing";
-  titleScreenEl.classList.add("hidden");
-  resultScreenEl.classList.add("hidden");
-
-  clearInterval(timerIntervalId);
-  timerIntervalId = setInterval(() => {
-    timeLeft -= 1;
-    updateHud();
-    if (timeLeft <= 0) {
-      endGame();
-    }
-  }, 1000);
-}
-
-function endGame() {
-  gameState = "result";
-  clearInterval(timerIntervalId);
-  resultScoreEl.textContent = `SCORE: ${score}`;
-  resultScreenEl.classList.remove("hidden");
-}
-
-startButtonEl.addEventListener("click", startGame);
-retryButtonEl.addEventListener("click", startGame);
-
-// 命中/ミス時に画面にふわっと出す文字演出
-function spawnFloatText(x, y, text, className) {
-  const el = document.createElement("div");
-  el.className = `float-text ${className}`;
-  el.textContent = text;
-  el.style.left = `${x}px`;
-  el.style.top = `${y}px`;
-  document.body.appendChild(el);
-  el.addEventListener("animationend", () => el.remove());
-}
-
-function registerHit(x, y) {
-  score += 10;
-  updateHud();
-  spawnFloatText(x, y, "+10 HIT!", "hit");
-  // ---- 命中時の演出 ----
-  scopeEl.style.filter = "drop-shadow(0 0 12px red) brightness(1.5)";
-  setTimeout(() => { scopeEl.style.filter = ""; }, 150);
-  // 命中した宝石は奥へ戻す（撃ち落とした扱い）
-  gem.position.z = START_Z;
-}
-
-function registerMiss(x, y) {
-  spawnFloatText(x, y, "MISS", "miss");
-}
-
 
 
 // ---- 飛び出しの距離設定 ----
