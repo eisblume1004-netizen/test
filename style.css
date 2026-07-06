@@ -1,0 +1,18 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  background: black;
+  cursor: none; /* デフォルトカーソルを消す */
+}
+
+#scope {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 80px;
+  height: 80px;
+  pointer-events: none; /* クリックを下のcanvasに通す */
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  will-change: transform;
+}
